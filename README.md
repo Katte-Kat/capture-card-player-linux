@@ -72,7 +72,7 @@ This prevents audio synchronization from introducing a visible video buffer. Pre
 
 ## Language
 
-The application, installer, uninstaller, and GitHub publisher automatically use German when the active locale starts with `de`; otherwise they use English. Override the detected language when needed:
+The application, installer, and uninstaller automatically use German when the active locale starts with `de`; otherwise they use English. Override the detected language when needed:
 
 ```bash
 CAPTURE_CARD_PLAYER_LANG=en capture-card-player
@@ -111,6 +111,8 @@ bash tests/smoke-test.sh
 ```
 
 The GitHub Actions workflow runs the same tests automatically for pushes and pull requests.
+
+The smoke test uses an isolated temporary directory and does not modify the installed application or the real home directory.
 
 ## License
 
