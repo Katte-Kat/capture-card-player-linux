@@ -1,5 +1,7 @@
 # Capture Card Player for Linux
 
+[English](README.md) | [Deutsch](README.de.md)
+
 [![Smoke test](https://github.com/Katte-Kat/capture-card-player-linux/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/Katte-Kat/capture-card-player-linux/actions/workflows/smoke-test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -17,6 +19,7 @@ USB and PCIe capture cards are detected in the same way. A card is supported whe
 - Separate low-latency video and audio paths
 - Native mpv and Flathub mpv support
 - KDialog, Zenity, or terminal interface
+- Automatic English/German interface based on the system locale
 - Per-user installation without writing application files to system directories
 
 ## Supported systems
@@ -66,6 +69,15 @@ Video runs separately with:
 ```
 
 This prevents audio synchronization from introducing a visible video buffer. Press `F` in mpv to toggle fullscreen mode and `Q` to close the player and stop the audio stream.
+
+## Language
+
+The application, installer, uninstaller, and GitHub publisher automatically use German when the active locale starts with `de`; otherwise they use English. Override the detected language when needed:
+
+```bash
+CAPTURE_CARD_PLAYER_LANG=en capture-card-player
+CAPTURE_CARD_PLAYER_LANG=de capture-card-player
+```
 
 ## Bazzite and SteamOS
 
