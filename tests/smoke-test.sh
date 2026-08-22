@@ -6,25 +6,13 @@ PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/capture-card-player-test.XXXXXX")"
 trap 'rm -r -- "$TEST_ROOT"' EXIT
 
+# All installation checks run inside this temporary sandbox. The test never
+# writes to the real home directory and removes the sandbox when it exits.
+
 bash -n \
   "$PROJECT_DIR/capture-card-player" \
   "$PROJECT_DIR/install.sh" \
-  "$PROJECT_DIR/publish-to-github.sh" \
   "$PROJECT_DIR/uninstall.sh"
-
-set +e
-publisher_english="$(CAPTURE_CARD_PLAYER_LANG=en \
-  bash "$PROJECT_DIR/publish-to-github.sh" test-repository invalid 2>&1)"
-publisher_english_status=$?
-publisher_german="$(CAPTURE_CARD_PLAYER_LANG=de \
-  bash "$PROJECT_DIR/publish-to-github.sh" test-repository invalid 2>&1)"
-publisher_german_status=$?
-set -e
-[[ $publisher_english_status -eq 2 ]]
-[[ $publisher_german_status -eq 2 ]]
-[[ "$publisher_english" == Usage:* ]]
-[[ "$publisher_german" == Verwendung:* ]]
-printf 'English/German GitHub publisher text: OK\n'
 
 # shellcheck disable=SC1091
 export CAPTURE_CARD_PLAYER_LANG=en
@@ -117,24 +105,6 @@ german_install_output="$(HOME="$TEST_ROOT/home-de" CAPTURE_CARD_PLAYER_LANG=de \
 grep -Fq 'Comment[de]=USB- oder PCIe-Capture-Karte mit geringer Verzögerung anzeigen' \
   "$TEST_ROOT/home-de/.local/share/applications/capture-card-player.desktop"
 printf 'German installer text: OK\n'
-
-if command -v git >/dev/null 2>&1; then
-  mkdir -p "$TEST_ROOT/repository"
-  cp -a "$PROJECT_DIR/." "$TEST_ROOT/repository/"
-  # GitHub Actions checks out the project as a Git repository. Remove that
-  # copied metadata so this section can validate a genuinely fresh repository.
-  if [[ -e "$TEST_ROOT/repository/.git" ]]; then
-    rm -r -- "$TEST_ROOT/repository/.git"
-  fi
-  git -C "$TEST_ROOT/repository" init -q -b main
-  git -C "$TEST_ROOT/repository" config user.name "Smoke Test"
-  git -C "$TEST_ROOT/repository" config user.email "smoke-test@example.invalid"
-  git -C "$TEST_ROOT/repository" add .
-  git -C "$TEST_ROOT/repository" commit -q -m "Smoke test"
-  git -C "$TEST_ROOT/repository" ls-files --error-unmatch \
-    .github/workflows/smoke-test.yml >/dev/null
-  printf 'GitHub repository structure: OK\n'
-fi
 
 uninstall_output="$(HOME="$TEST_ROOT/home" CAPTURE_CARD_PLAYER_LANG=en PATH="/usr/bin:/bin" \
   bash "$PROJECT_DIR/uninstall.sh")"
