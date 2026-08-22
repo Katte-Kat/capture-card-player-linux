@@ -46,15 +46,6 @@ bash uninstall.sh
 
 Eine eventuell zuvor angelegte Sicherung der Desktop-Datei wird absichtlich nicht gelöscht.
 
-## Auf GitHub veröffentlichen
-
-Mit installiertem `git` und der GitHub CLI `gh`:
-
-```bash
-bash publish-to-github.sh
-```
-
-Das Skript fragt bei Bedarf nach der Git-Identität, führt die GitHub-Anmeldung aus und erstellt standardmäßig das öffentliche Repository `capture-card-player-linux`. Alternativ können alle Dateien dieses Ordners über die GitHub-Weboberfläche in ein neues Repository hochgeladen werden.
 
 ## Lizenz
 
