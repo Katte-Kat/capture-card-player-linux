@@ -106,6 +106,8 @@ HOME="$TEST_ROOT/home" CAPTURE_CARD_PLAYER_LANG=en PATH="$TEST_ROOT/bin:/usr/bin
 [[ -f "$TEST_ROOT/home/.local/share/applications/capture-card-player.desktop" ]]
 grep -Fq "Exec=$TEST_ROOT/home/.local/bin/capture-card-player" \
   "$TEST_ROOT/home/.local/share/applications/capture-card-player.desktop"
+grep -Fq 'Icon=input-gaming' \
+  "$TEST_ROOT/home/.local/share/applications/capture-card-player.desktop"
 printf 'Per-user installation: OK\n'
 
 mkdir -p "$TEST_ROOT/home-de"
