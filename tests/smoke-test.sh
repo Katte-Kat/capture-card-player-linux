@@ -119,6 +119,11 @@ printf 'German installer text: OK\n'
 if command -v git >/dev/null 2>&1; then
   mkdir -p "$TEST_ROOT/repository"
   cp -a "$PROJECT_DIR/." "$TEST_ROOT/repository/"
+  # GitHub Actions checks out the project as a Git repository. Remove that
+  # copied metadata so this section can validate a genuinely fresh repository.
+  if [[ -e "$TEST_ROOT/repository/.git" ]]; then
+    rm -r -- "$TEST_ROOT/repository/.git"
+  fi
   git -C "$TEST_ROOT/repository" init -q -b main
   git -C "$TEST_ROOT/repository" config user.name "Smoke Test"
   git -C "$TEST_ROOT/repository" config user.email "smoke-test@example.invalid"
