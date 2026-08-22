@@ -6,6 +6,8 @@ APP_NAME="Capture Card Player for Linux"
 TERMINAL_MODE=false
 AUDIO_PID=""
 UI_LANGUAGE="en"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/capture-card-player"
+SETTINGS_FILE="$CONFIG_DIR/settings"
 
 detect_ui_language() {
   local locale="${CAPTURE_CARD_PLAYER_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}}"
@@ -75,6 +77,22 @@ text_for() {
     select_audio_output)
       english="Select an audio output"
       german="Audioausgang auswählen"
+      ;;
+    settings_prompt)
+      english="Use the device settings saved from the previous launch?"
+      german="Die vom letzten Start gespeicherten Geräteeinstellungen verwenden?"
+      ;;
+    use_saved_settings)
+      english="Use saved settings"
+      german="Gespeicherte Einstellungen verwenden"
+      ;;
+    select_new_settings)
+      english="Select devices again"
+      german="Geräte neu auswählen"
+      ;;
+    saved_unavailable)
+      english="One or more saved devices are no longer available. Please select the devices again."
+      german="Mindestens ein gespeichertes Gerät ist nicht mehr verfügbar. Bitte wähle die Geräte erneut aus."
       ;;
     audio_failed)
       english="The audio stream could not be started."
@@ -202,6 +220,60 @@ choose_index() {
       return 0
     fi
   done
+}
+
+contains_value() {
+  local expected="$1"
+  shift
+  local value
+  for value in "$@"; do
+    [[ "$value" == "$expected" ]] && return 0
+  done
+  return 1
+}
+
+load_saved_settings() {
+  SAVED_VIDEO_DEVICE=""
+  SAVED_AUDIO_SOURCE=""
+  SAVED_AUDIO_SINK=""
+
+  [[ -r "$SETTINGS_FILE" ]] || return 1
+
+  local key value
+  while IFS='=' read -r key value; do
+    value="${value%$'\r'}"
+    case "$key" in
+      video_device) SAVED_VIDEO_DEVICE="$value" ;;
+      audio_source) SAVED_AUDIO_SOURCE="$value" ;;
+      audio_sink) SAVED_AUDIO_SINK="$value" ;;
+    esac
+  done < "$SETTINGS_FILE"
+
+  [[ -n "$SAVED_VIDEO_DEVICE" && -n "$SAVED_AUDIO_SOURCE" && -n "$SAVED_AUDIO_SINK" ]]
+}
+
+saved_settings_available() {
+  contains_value "$SAVED_VIDEO_DEVICE" "${VIDEO_VALUES[@]}" &&
+    contains_value "$SAVED_AUDIO_SOURCE" "${SOURCE_VALUES[@]}" &&
+    contains_value "$SAVED_AUDIO_SINK" "${SINK_VALUES[@]}"
+}
+
+save_settings() {
+  local video_device="$1"
+  local audio_source="$2"
+  local audio_sink="$3"
+  local temporary_file="$SETTINGS_FILE.tmp.$$"
+
+  mkdir -p "$CONFIG_DIR" || return 1
+  if ! (umask 077; {
+    printf 'video_device=%s\n' "$video_device"
+    printf 'audio_source=%s\n' "$audio_source"
+    printf 'audio_sink=%s\n' "$audio_sink"
+  } > "$temporary_file"); then
+    rm -f -- "$temporary_file"
+    return 1
+  fi
+  mv -f -- "$temporary_file" "$SETTINGS_FILE"
 }
 
 video_bus_label() {
@@ -414,23 +486,42 @@ main() {
     exit 1
   fi
 
-  local video_index
-  video_index="$(choose_index "$APP_NAME" "$(text_for select_video)" "${VIDEO_LABELS[@]}")" || exit 0
-  local video_device="${VIDEO_VALUES[$video_index]}"
-
   find_audio_devices
-  local source_index=0 sink_index=0
-  source_index="$(choose_index "$APP_NAME" "$(text_for select_audio_input)" "${SOURCE_LABELS[@]}")" || exit 0
-  local audio_source="${SOURCE_VALUES[$source_index]}"
+  local video_device="" audio_source="" audio_sink=""
+  local settings_index
 
-  if [[ "$audio_source" != "__none__" ]]; then
-    if [[ "$AUDIO_BACKEND" == "none" ]]; then
-      show_error "$(text_for no_audio_tools)"
-      exit 1
+  if load_saved_settings; then
+    settings_index="$(choose_index "$APP_NAME" "$(text_for settings_prompt)" \
+      "$(text_for use_saved_settings)" "$(text_for select_new_settings)")" || exit 0
+    if ((settings_index == 0)); then
+      if saved_settings_available; then
+        video_device="$SAVED_VIDEO_DEVICE"
+        audio_source="$SAVED_AUDIO_SOURCE"
+        audio_sink="$SAVED_AUDIO_SINK"
+      else
+        show_info "$(text_for saved_unavailable)"
+      fi
     fi
-    sink_index="$(choose_index "$APP_NAME" "$(text_for select_audio_output)" "${SINK_LABELS[@]}")" || exit 0
   fi
-  local audio_sink="${SINK_VALUES[$sink_index]}"
+
+  if [[ -z "$video_device" ]]; then
+    local video_index source_index=0 sink_index=0
+    video_index="$(choose_index "$APP_NAME" "$(text_for select_video)" "${VIDEO_LABELS[@]}")" || exit 0
+    video_device="${VIDEO_VALUES[$video_index]}"
+
+    source_index="$(choose_index "$APP_NAME" "$(text_for select_audio_input)" "${SOURCE_LABELS[@]}")" || exit 0
+    audio_source="${SOURCE_VALUES[$source_index]}"
+
+    if [[ "$audio_source" != "__none__" ]]; then
+      if [[ "$AUDIO_BACKEND" == "none" ]]; then
+        show_error "$(text_for no_audio_tools)"
+        exit 1
+      fi
+      sink_index="$(choose_index "$APP_NAME" "$(text_for select_audio_output)" "${SINK_LABELS[@]}")" || exit 0
+    fi
+    audio_sink="${SINK_VALUES[$sink_index]}"
+    save_settings "$video_device" "$audio_source" "$audio_sink" || true
+  fi
 
   if ! start_audio "$audio_source" "$audio_sink"; then
     show_error "$(text_for audio_failed)"

@@ -7,6 +7,8 @@ BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 TARGET="$BIN_DIR/$APP_ID"
 DESKTOP_FILE="$APPLICATIONS_DIR/$APP_ID.desktop"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/capture-card-player"
+SETTINGS_FILE="$CONFIG_DIR/settings"
 
 locale="${CAPTURE_CARD_PLAYER_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}}"
 if [[ "$locale" == de* || "$locale" == DE* ]]; then
@@ -15,7 +17,8 @@ else
   UI_LANGUAGE="en"
 fi
 
-rm -f -- "$TARGET" "$DESKTOP_FILE"
+rm -f -- "$TARGET" "$DESKTOP_FILE" "$SETTINGS_FILE"
+rmdir -- "$CONFIG_DIR" 2>/dev/null || true
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$APPLICATIONS_DIR" >/dev/null 2>&1 || true

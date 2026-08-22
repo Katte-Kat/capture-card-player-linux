@@ -8,7 +8,8 @@ USB- und PCIe-Capture-Karten werden auf dieselbe Weise erkannt. Eine Karte wird 
 
 ## Funktionen
 
-- Videoeingang bei jedem Start auswählen
+- Ausgewählte Geräte speichern und beim nächsten Start erneut verwenden
+- Zwischen gespeicherten Einstellungen und einer neuen Geräteauswahl wählen
 - Beliebigen PipeWire- oder PulseAudio-Eingang auswählen
 - Bestimmten Audioausgang oder den Systemstandard verwenden
 - Unterstützung für USB- und PCIe-Capture-Karten
@@ -51,11 +52,13 @@ Falls mpv fehlt, bietet der Installer unter Bazzite/SteamOS das Flathub-mpv-Pake
 
 ## Bedienung
 
-Beim Start fragt die Anwendung nacheinander nach:
+Beim ersten Start fragt die Anwendung nacheinander nach:
 
 1. Videoeingang
 2. Audioeingang oder **Kein Audio**
 3. Audioausgang oder **Systemstandard**
+
+Die Auswahl wird unter `~/.config/capture-card-player/settings` gespeichert (oder unterhalb von `$XDG_CONFIG_HOME`, falls gesetzt). Bei späteren Starts fragt das erste Menü, ob die gespeicherten Einstellungen verwendet oder die Geräte neu ausgewählt werden sollen. Ist ein gespeichertes Gerät nicht mehr verfügbar, wechselt die Anwendung automatisch zurück zur Geräteauswahl.
 
 **Systemstandard** verwendet den Ausgang, der beim Start der Wiedergabe aktiv ist. Falls der Audiostream nach einer Änderung des Systemausgangs nicht automatisch mitwandert, die Anwendung neu starten.
 

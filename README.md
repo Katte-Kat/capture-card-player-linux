@@ -8,7 +8,8 @@ USB and PCIe capture cards are detected in the same way. A card is supported whe
 
 ## Features
 
-- Select a video input at every launch
+- Save the selected devices and reuse them on the next launch
+- Choose between saved settings and selecting the devices again
 - Select any available PipeWire or PulseAudio input
 - Select a specific audio output or use the system default
 - Supports USB and PCIe capture cards
@@ -51,11 +52,13 @@ If mpv is missing, the installer offers to install the Flathub mpv package on Ba
 
 ## Usage
 
-The application asks for these selections at launch:
+On the first launch, the application asks for these selections:
 
 1. Video input
 2. Audio input or **No audio**
 3. Audio output or **System default**
+
+The selection is saved in `~/.config/capture-card-player/settings` (or below `$XDG_CONFIG_HOME` when it is set). On later launches, the first menu asks whether to use the saved settings or select the devices again. If a saved device is no longer available, the application automatically returns to device selection.
 
 **System default** uses the output that is active when playback starts. If you change the system output while playing and the stream does not move automatically, restart the application.
 
