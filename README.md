@@ -50,3 +50,5 @@ Eine eventuell zuvor angelegte Sicherung der Desktop-Datei wird absichtlich nich
 ## Lizenz
 
 MIT – siehe [LICENSE](LICENSE).
+
+Mit AI Hilfe erstellt*
