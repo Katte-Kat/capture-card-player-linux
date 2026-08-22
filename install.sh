@@ -190,7 +190,7 @@ main() {
     printf '%s\n' 'Comment=View a USB or PCIe capture card with low latency'
     printf '%s\n' 'Comment[de]=USB- oder PCIe-Capture-Karte mit geringer Verzögerung anzeigen'
     printf 'Exec=%s\n' "$TARGET"
-    printf '%s\n' 'Icon=camera-video'
+    printf '%s\n' 'Icon=input-gaming'
     printf '%s\n' 'Terminal=false'
     printf '%s\n' 'Categories=AudioVideo;Video;'
     printf '%s\n' 'StartupNotify=true'
