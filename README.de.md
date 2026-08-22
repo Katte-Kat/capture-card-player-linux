@@ -72,7 +72,7 @@ Dadurch erzeugt die Audiosynchronisation keinen sichtbaren Videopuffer. Mit `F` 
 
 ## Sprache
 
-Anwendung, Installer, Uninstaller und GitHub-Publisher verwenden automatisch Deutsch, wenn die aktive Locale mit `de` beginnt; ansonsten wird Englisch verwendet. Die Sprache kann bei Bedarf erzwungen werden:
+Anwendung, Installer und Uninstaller verwenden automatisch Deutsch, wenn die aktive Locale mit `de` beginnt; ansonsten wird Englisch verwendet. Die Sprache kann bei Bedarf erzwungen werden:
 
 ```bash
 CAPTURE_CARD_PLAYER_LANG=de capture-card-player
@@ -111,6 +111,8 @@ bash tests/smoke-test.sh
 ```
 
 Der GitHub-Actions-Workflow führt dieselben Tests automatisch bei Pushes und Pull Requests aus.
+
+Der Smoke-Test verwendet ein isoliertes temporäres Verzeichnis und verändert weder die installierte Anwendung noch das echte Home-Verzeichnis.
 
 ## Lizenz
 
