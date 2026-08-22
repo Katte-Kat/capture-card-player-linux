@@ -102,3 +102,5 @@ An existing backup of the desktop entry is intentionally left in place.
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE).
+
+*Created with AI assistance.*
