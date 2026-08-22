@@ -102,3 +102,5 @@ Ein vorhandenes Backup des Desktop-Eintrags bleibt absichtlich erhalten.
 ## Lizenz
 
 Veröffentlicht unter der MIT-Lizenz. Siehe [LICENSE](LICENSE).
+
+*Mit Unterstützung von KI erstellt.*
