@@ -1,0 +1,359 @@
+#!/usr/bin/env bash
+
+set -u
+
+APP_NAME="Capture Card Player for Linux"
+TERMINAL_MODE=false
+AUDIO_PID=""
+
+if [[ "${1:-}" == "--terminal-ui" ]]; then
+  TERMINAL_MODE=true
+fi
+
+show_error() {
+  local message="$1"
+  if command -v kdialog >/dev/null 2>&1 && [[ "$TERMINAL_MODE" == false ]]; then
+    kdialog --title "$APP_NAME" --error "$message"
+  elif command -v zenity >/dev/null 2>&1 && [[ "$TERMINAL_MODE" == false ]]; then
+    zenity --title="$APP_NAME" --error --text="$message"
+  else
+    printf '\n%s\n' "$message" >&2
+    if [[ ! -t 0 ]]; then
+      return
+    fi
+    read -r -p "Enter zum Beenden ..." _
+  fi
+}
+
+show_info() {
+  local message="$1"
+  if command -v kdialog >/dev/null 2>&1 && [[ "$TERMINAL_MODE" == false ]]; then
+    kdialog --title "$APP_NAME" --msgbox "$message"
+  elif command -v zenity >/dev/null 2>&1 && [[ "$TERMINAL_MODE" == false ]]; then
+    zenity --title="$APP_NAME" --info --text="$message"
+  else
+    printf '\n%s\n' "$message"
+  fi
+}
+
+ensure_ui() {
+  if [[ "$TERMINAL_MODE" == true ]] || command -v kdialog >/dev/null 2>&1 || command -v zenity >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local self
+  self="$(readlink -f "$0")"
+
+  if command -v konsole >/dev/null 2>&1; then
+    exec konsole -e "$self" --terminal-ui
+  elif command -v kgx >/dev/null 2>&1; then
+    exec kgx -- "$self" --terminal-ui
+  elif command -v gnome-terminal >/dev/null 2>&1; then
+    exec gnome-terminal -- "$self" --terminal-ui
+  elif command -v xterm >/dev/null 2>&1; then
+    exec xterm -e "$self" --terminal-ui
+  fi
+
+  show_error "Es wurde weder KDialog/Zenity noch ein unterstütztes Terminal gefunden."
+  exit 1
+}
+
+# Usage: choose_index TITLE PROMPT LABEL...
+# Prints the zero-based index of the selected label.
+choose_index() {
+  local title="$1"
+  local prompt="$2"
+  shift 2
+  local labels=("$@")
+  local result=""
+  local i
+
+  if command -v kdialog >/dev/null 2>&1 && [[ "$TERMINAL_MODE" == false ]]; then
+    local menu_args=()
+    for i in "${!labels[@]}"; do
+      menu_args+=("$i" "${labels[$i]}")
+    done
+    result="$(kdialog --title "$title" --menu "$prompt" "${menu_args[@]}")" || return 1
+    printf '%s\n' "$result"
+    return 0
+  fi
+
+  if command -v zenity >/dev/null 2>&1 && [[ "$TERMINAL_MODE" == false ]]; then
+    local rows=()
+    local selected="TRUE"
+    for i in "${!labels[@]}"; do
+      rows+=("$selected" "$i" "${labels[$i]}")
+      selected="FALSE"
+    done
+    result="$(zenity --title="$title" --list --radiolist \
+      --width=760 --height=440 \
+      --text="$prompt" \
+      --column="" --column="Index" --column="Gerät" \
+      --hide-column=2 --print-column=2 \
+      "${rows[@]}")" || return 1
+    [[ -n "$result" ]] || return 1
+    printf '%s\n' "$result"
+    return 0
+  fi
+
+  printf '\n%s\n' "$prompt" >&2
+  for i in "${!labels[@]}"; do
+    printf '  %d) %s\n' "$((i + 1))" "${labels[$i]}" >&2
+  done
+  while true; do
+    read -r -p "Auswahl [1-${#labels[@]}]: " result || return 1
+    if [[ "$result" =~ ^[0-9]+$ ]] && ((result >= 1 && result <= ${#labels[@]})); then
+      printf '%s\n' "$((result - 1))"
+      return 0
+    fi
+  done
+}
+
+video_bus_label() {
+  local device="$1"
+  local sys_path=""
+  sys_path="$(readlink -f "/sys/class/video4linux/${device##*/}/device" 2>/dev/null || true)"
+
+  if [[ "$sys_path" == *"/usb"* ]]; then
+    printf '%s\n' "USB"
+  elif [[ "$sys_path" == *"/pci"* ]]; then
+    printf '%s\n' "PCIe"
+  else
+    printf '%s\n' "V4L2"
+  fi
+}
+
+find_video_devices() {
+  VIDEO_VALUES=()
+  VIDEO_LABELS=()
+
+  local device name sys_name bus
+  shopt -s nullglob
+  for device in /dev/video*; do
+    [[ -c "$device" ]] || continue
+    name=""
+    sys_name="/sys/class/video4linux/${device##*/}/name"
+    if [[ -r "$sys_name" ]]; then
+      IFS= read -r name < "$sys_name" || true
+    fi
+    [[ -n "$name" ]] || name="Unbekanntes Videogerät"
+    bus="$(video_bus_label "$device")"
+    VIDEO_VALUES+=("$device")
+    VIDEO_LABELS+=("[$bus] $name — $device")
+  done
+  shopt -u nullglob
+}
+
+load_pactl_descriptions() {
+  local kind="$1"
+  local line current_name="" current_desc="" output=""
+
+  output="$(LC_ALL=C pactl "list" "$kind" 2>/dev/null || true)"
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^[[:space:]]*Name:[[:space:]](.+)$ ]]; then
+      current_name="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ^[[:space:]]*Description:[[:space:]](.+)$ ]]; then
+      current_desc="${BASH_REMATCH[1]}"
+      if [[ -n "$current_name" ]]; then
+        if [[ "$kind" == "sources" ]]; then
+          SOURCE_DESCRIPTIONS["$current_name"]="$current_desc"
+        else
+          SINK_DESCRIPTIONS["$current_name"]="$current_desc"
+        fi
+      fi
+    fi
+  done <<< "$output"
+}
+
+find_audio_with_pulse() {
+  AUDIO_BACKEND="pulse"
+  SOURCE_VALUES=("__none__")
+  SOURCE_LABELS=("Kein Audio")
+  SINK_VALUES=("__default__")
+  SINK_LABELS=("Systemstandard (folgt dem aktuellen Ausgang)")
+
+  declare -gA SOURCE_DESCRIPTIONS=()
+  declare -gA SINK_DESCRIPTIONS=()
+  load_pactl_descriptions sources
+  load_pactl_descriptions sinks
+
+  local id name rest description source_output sink_output
+  source_output="$(pactl list short sources 2>/dev/null || true)"
+  sink_output="$(pactl list short sinks 2>/dev/null || true)"
+  while IFS=$'\t' read -r id name rest; do
+    [[ -n "$name" ]] || continue
+    [[ "$name" == *.monitor ]] && continue
+    description="${SOURCE_DESCRIPTIONS[$name]:-$name}"
+    SOURCE_VALUES+=("$name")
+    SOURCE_LABELS+=("$description")
+  done <<< "$source_output"
+
+  while IFS=$'\t' read -r id name rest; do
+    [[ -n "$name" ]] || continue
+    description="${SINK_DESCRIPTIONS[$name]:-$name}"
+    SINK_VALUES+=("$name")
+    SINK_LABELS+=("$description")
+  done <<< "$sink_output"
+}
+
+find_audio_with_pipewire() {
+  AUDIO_BACKEND="pipewire"
+  SOURCE_VALUES=("__none__")
+  SOURCE_LABELS=("Kein Audio")
+  SINK_VALUES=("__default__")
+  SINK_LABELS=("Systemstandard (folgt dem aktuellen Ausgang)")
+
+  local section="" line id name output
+  output="$(wpctl status -n 2>/dev/null || true)"
+  while IFS= read -r line; do
+    if [[ "$line" == *"Sinks:"* ]]; then
+      section="sinks"
+      continue
+    elif [[ "$line" == *"Sources:"* ]]; then
+      section="sources"
+      continue
+    elif [[ "$line" == *"Filters:"* || "$line" == *"Streams:"* || "$line" == *"Video"* ]]; then
+      section=""
+      continue
+    fi
+
+    if [[ -n "$section" && "$line" =~ ([0-9]+)\.[[:space:]]+([^[:space:]]+) ]]; then
+      id="${BASH_REMATCH[1]}"
+      name="${BASH_REMATCH[2]}"
+      name="${name%[}"
+      if [[ "$section" == "sources" ]]; then
+        [[ "$name" == *.monitor ]] && continue
+        SOURCE_VALUES+=("$id")
+        SOURCE_LABELS+=("$name (ID $id)")
+      else
+        SINK_VALUES+=("$id")
+        SINK_LABELS+=("$name (ID $id)")
+      fi
+    fi
+  done <<< "$output"
+}
+
+find_audio_devices() {
+  AUDIO_BACKEND="none"
+  SOURCE_VALUES=("__none__")
+  SOURCE_LABELS=("Kein Audio")
+  SINK_VALUES=("__default__")
+  SINK_LABELS=("Systemstandard")
+
+  if command -v pactl >/dev/null 2>&1 && command -v parec >/dev/null 2>&1 && command -v pacat >/dev/null 2>&1; then
+    find_audio_with_pulse
+  elif command -v wpctl >/dev/null 2>&1 && command -v pw-loopback >/dev/null 2>&1; then
+    find_audio_with_pipewire
+  fi
+}
+
+find_player() {
+  if command -v mpv >/dev/null 2>&1; then
+    PLAYER=(mpv)
+    return 0
+  fi
+
+  if command -v flatpak >/dev/null 2>&1 && flatpak info io.mpv.Mpv >/dev/null 2>&1; then
+    PLAYER=(flatpak run io.mpv.Mpv)
+    return 0
+  fi
+
+  return 1
+}
+
+cleanup() {
+  if [[ -n "$AUDIO_PID" ]] && kill -0 "$AUDIO_PID" 2>/dev/null; then
+    kill "$AUDIO_PID" 2>/dev/null || true
+  fi
+  pkill -P "$$" 2>/dev/null || true
+}
+
+start_audio() {
+  local source="$1"
+  local sink="$2"
+
+  [[ "$source" != "__none__" ]] || return 0
+
+  if [[ "$AUDIO_BACKEND" == "pulse" ]]; then
+    if [[ "$sink" == "__default__" ]]; then
+      parec --device="$source" --format=s16le --rate=48000 --channels=2 \
+        --latency-msec=20 --process-time-msec=5 2>/dev/null |
+        pacat --playback --format=s16le --rate=48000 --channels=2 \
+          --latency-msec=20 --process-time-msec=5 2>/dev/null &
+    else
+      parec --device="$source" --format=s16le --rate=48000 --channels=2 \
+        --latency-msec=20 --process-time-msec=5 2>/dev/null |
+        pacat --playback --device="$sink" --format=s16le --rate=48000 --channels=2 \
+          --latency-msec=20 --process-time-msec=5 2>/dev/null &
+    fi
+    AUDIO_PID=$!
+    return 0
+  fi
+
+  if [[ "$AUDIO_BACKEND" == "pipewire" ]]; then
+    if [[ "$sink" == "__default__" ]]; then
+      pw-loopback --capture="$source" --delay=0 >/dev/null 2>&1 &
+    else
+      pw-loopback --capture="$source" --playback="$sink" --delay=0 >/dev/null 2>&1 &
+    fi
+    AUDIO_PID=$!
+    return 0
+  fi
+
+  return 1
+}
+
+main() {
+  ensure_ui
+  trap cleanup EXIT INT TERM
+
+  if ! find_player; then
+    show_error "mpv wurde nicht gefunden. Führe install.sh erneut aus oder installiere mpv/den Flathub-mpv."
+    exit 1
+  fi
+
+  find_video_devices
+  if ((${#VIDEO_VALUES[@]} == 0)); then
+    show_error "Kein V4L2-Videogerät unter /dev/video* gefunden."
+    exit 1
+  fi
+
+  local video_index
+  video_index="$(choose_index "$APP_NAME" "Videoeingang auswählen" "${VIDEO_LABELS[@]}")" || exit 0
+  local video_device="${VIDEO_VALUES[$video_index]}"
+
+  find_audio_devices
+  local source_index=0 sink_index=0
+  source_index="$(choose_index "$APP_NAME" "Audioeingang auswählen" "${SOURCE_LABELS[@]}")" || exit 0
+  local audio_source="${SOURCE_VALUES[$source_index]}"
+
+  if [[ "$audio_source" != "__none__" ]]; then
+    if [[ "$AUDIO_BACKEND" == "none" ]]; then
+      show_error "Kein Audio-Werkzeug gefunden. Benötigt werden entweder pactl/parec/pacat oder wpctl/pw-loopback."
+      exit 1
+    fi
+    sink_index="$(choose_index "$APP_NAME" "Audioausgang auswählen" "${SINK_LABELS[@]}")" || exit 0
+  fi
+  local audio_sink="${SINK_VALUES[$sink_index]}"
+
+  if ! start_audio "$audio_source" "$audio_sink"; then
+    show_error "Der Audiostream konnte nicht gestartet werden."
+    exit 1
+  fi
+
+  "${PLAYER[@]}" "av://v4l2:$video_device" \
+    --profile=low-latency \
+    --untimed \
+    --no-audio \
+    --fs
+  local status=$?
+
+  if ((status != 0)); then
+    show_error "mpv wurde mit Fehlercode $status beendet. Prüfe, ob das ausgewählte Gerät gerade von OBS oder einer anderen App verwendet wird."
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
