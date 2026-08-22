@@ -2,9 +2,6 @@
 
 [English](README.md) | [Deutsch](README.de.md)
 
-[![Smoke test](https://github.com/Katte-Kat/capture-card-player-linux/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/Katte-Kat/capture-card-player-linux/actions/workflows/smoke-test.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 A small Linux application for viewing and playing through a capture card with minimal display latency. At launch, you can select the video input, audio input, and audio output.
 
 USB and PCIe capture cards are detected in the same way. A card is supported when Linux exposes it as a standard V4L2 device under `/dev/video*`. Audio is selected separately through PipeWire or PulseAudio, which also supports PCIe cards that expose audio as a separate input.
@@ -102,20 +99,6 @@ bash uninstall.sh
 
 An existing backup of the desktop entry is intentionally left in place.
 
-## Development
-
-Run the local smoke tests with:
-
-```bash
-bash tests/smoke-test.sh
-```
-
-The GitHub Actions workflow runs the same tests automatically for pushes and pull requests.
-
-The smoke test uses an isolated temporary directory and does not modify the installed application or the real home directory.
-
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE).
-
-*Created with AI assistance.*
