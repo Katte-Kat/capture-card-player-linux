@@ -5,6 +5,99 @@ set -u
 APP_NAME="Capture Card Player for Linux"
 TERMINAL_MODE=false
 AUDIO_PID=""
+UI_LANGUAGE="en"
+
+detect_ui_language() {
+  local locale="${CAPTURE_CARD_PLAYER_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}}"
+  case "$locale" in
+    de*|DE*) UI_LANGUAGE="de" ;;
+    *) UI_LANGUAGE="en" ;;
+  esac
+}
+
+text_for() {
+  local key="$1"
+  local english="" german=""
+
+  case "$key" in
+    press_enter)
+      english="Press Enter to exit ..."
+      german="Enter zum Beenden ..."
+      ;;
+    no_ui)
+      english="Neither KDialog/Zenity nor a supported terminal was found."
+      german="Es wurde weder KDialog/Zenity noch ein unterstütztes Terminal gefunden."
+      ;;
+    device_column)
+      english="Device"
+      german="Gerät"
+      ;;
+    selection_range)
+      english="Selection [1-%s]: "
+      german="Auswahl [1-%s]: "
+      ;;
+    unknown_video)
+      english="Unknown video device"
+      german="Unbekanntes Videogerät"
+      ;;
+    no_audio)
+      english="No audio"
+      german="Kein Audio"
+      ;;
+    system_default_current)
+      english="System default (uses the current output)"
+      german="Systemstandard (verwendet den aktuellen Ausgang)"
+      ;;
+    system_default)
+      english="System default"
+      german="Systemstandard"
+      ;;
+    mpv_missing)
+      english="mpv was not found. Run install.sh again or install mpv/the Flathub mpv package."
+      german="mpv wurde nicht gefunden. Führe install.sh erneut aus oder installiere mpv/das Flathub-mpv-Paket."
+      ;;
+    no_video)
+      english="No V4L2 video device was found under /dev/video*."
+      german="Unter /dev/video* wurde kein V4L2-Videogerät gefunden."
+      ;;
+    select_video)
+      english="Select a video input"
+      german="Videoeingang auswählen"
+      ;;
+    select_audio_input)
+      english="Select an audio input"
+      german="Audioeingang auswählen"
+      ;;
+    no_audio_tools)
+      english="No supported audio tools were found. Install either pactl/parec/pacat or wpctl/pw-loopback."
+      german="Keine unterstützten Audio-Werkzeuge gefunden. Installiere entweder pactl/parec/pacat oder wpctl/pw-loopback."
+      ;;
+    select_audio_output)
+      english="Select an audio output"
+      german="Audioausgang auswählen"
+      ;;
+    audio_failed)
+      english="The audio stream could not be started."
+      german="Der Audiostream konnte nicht gestartet werden."
+      ;;
+    mpv_error)
+      english="mpv exited with error code %s. Check whether OBS or another application is currently using the selected device."
+      german="mpv wurde mit Fehlercode %s beendet. Prüfe, ob OBS oder eine andere Anwendung das ausgewählte Gerät gerade verwendet."
+      ;;
+    *)
+      english="$key"
+      german="$key"
+      ;;
+  esac
+
+  if [[ "$UI_LANGUAGE" == "de" ]]; then
+    printf '%s' "$german"
+  else
+    printf '%s' "$english"
+  fi
+}
+
+detect_ui_language
 
 if [[ "${1:-}" == "--terminal-ui" ]]; then
   TERMINAL_MODE=true
@@ -21,7 +114,7 @@ show_error() {
     if [[ ! -t 0 ]]; then
       return
     fi
-    read -r -p "Enter zum Beenden ..." _
+    read -r -p "$(text_for press_enter)" _
   fi
 }
 
@@ -54,7 +147,7 @@ ensure_ui() {
     exec xterm -e "$self" --terminal-ui
   fi
 
-  show_error "Es wurde weder KDialog/Zenity noch ein unterstütztes Terminal gefunden."
+  show_error "$(text_for no_ui)"
   exit 1
 }
 
@@ -88,7 +181,7 @@ choose_index() {
     result="$(zenity --title="$title" --list --radiolist \
       --width=760 --height=440 \
       --text="$prompt" \
-      --column="" --column="Index" --column="Gerät" \
+      --column="" --column="Index" --column="$(text_for device_column)" \
       --hide-column=2 --print-column=2 \
       "${rows[@]}")" || return 1
     [[ -n "$result" ]] || return 1
@@ -100,8 +193,10 @@ choose_index() {
   for i in "${!labels[@]}"; do
     printf '  %d) %s\n' "$((i + 1))" "${labels[$i]}" >&2
   done
+  local selection_prompt
+  printf -v selection_prompt "$(text_for selection_range)" "${#labels[@]}"
   while true; do
-    read -r -p "Auswahl [1-${#labels[@]}]: " result || return 1
+    read -r -p "$selection_prompt" result || return 1
     if [[ "$result" =~ ^[0-9]+$ ]] && ((result >= 1 && result <= ${#labels[@]})); then
       printf '%s\n' "$((result - 1))"
       return 0
@@ -136,7 +231,7 @@ find_video_devices() {
     if [[ -r "$sys_name" ]]; then
       IFS= read -r name < "$sys_name" || true
     fi
-    [[ -n "$name" ]] || name="Unbekanntes Videogerät"
+    [[ -n "$name" ]] || name="$(text_for unknown_video)"
     bus="$(video_bus_label "$device")"
     VIDEO_VALUES+=("$device")
     VIDEO_LABELS+=("[$bus] $name — $device")
@@ -169,9 +264,9 @@ load_pactl_descriptions() {
 find_audio_with_pulse() {
   AUDIO_BACKEND="pulse"
   SOURCE_VALUES=("__none__")
-  SOURCE_LABELS=("Kein Audio")
+  SOURCE_LABELS=("$(text_for no_audio)")
   SINK_VALUES=("__default__")
-  SINK_LABELS=("Systemstandard (folgt dem aktuellen Ausgang)")
+  SINK_LABELS=("$(text_for system_default_current)")
 
   declare -gA SOURCE_DESCRIPTIONS=()
   declare -gA SINK_DESCRIPTIONS=()
@@ -200,9 +295,9 @@ find_audio_with_pulse() {
 find_audio_with_pipewire() {
   AUDIO_BACKEND="pipewire"
   SOURCE_VALUES=("__none__")
-  SOURCE_LABELS=("Kein Audio")
+  SOURCE_LABELS=("$(text_for no_audio)")
   SINK_VALUES=("__default__")
-  SINK_LABELS=("Systemstandard (folgt dem aktuellen Ausgang)")
+  SINK_LABELS=("$(text_for system_default_current)")
 
   local section="" line id name output
   output="$(wpctl status -n 2>/dev/null || true)"
@@ -237,9 +332,9 @@ find_audio_with_pipewire() {
 find_audio_devices() {
   AUDIO_BACKEND="none"
   SOURCE_VALUES=("__none__")
-  SOURCE_LABELS=("Kein Audio")
+  SOURCE_LABELS=("$(text_for no_audio)")
   SINK_VALUES=("__default__")
-  SINK_LABELS=("Systemstandard")
+  SINK_LABELS=("$(text_for system_default)")
 
   if command -v pactl >/dev/null 2>&1 && command -v parec >/dev/null 2>&1 && command -v pacat >/dev/null 2>&1; then
     find_audio_with_pulse
@@ -309,36 +404,36 @@ main() {
   trap cleanup EXIT INT TERM
 
   if ! find_player; then
-    show_error "mpv wurde nicht gefunden. Führe install.sh erneut aus oder installiere mpv/den Flathub-mpv."
+    show_error "$(text_for mpv_missing)"
     exit 1
   fi
 
   find_video_devices
   if ((${#VIDEO_VALUES[@]} == 0)); then
-    show_error "Kein V4L2-Videogerät unter /dev/video* gefunden."
+    show_error "$(text_for no_video)"
     exit 1
   fi
 
   local video_index
-  video_index="$(choose_index "$APP_NAME" "Videoeingang auswählen" "${VIDEO_LABELS[@]}")" || exit 0
+  video_index="$(choose_index "$APP_NAME" "$(text_for select_video)" "${VIDEO_LABELS[@]}")" || exit 0
   local video_device="${VIDEO_VALUES[$video_index]}"
 
   find_audio_devices
   local source_index=0 sink_index=0
-  source_index="$(choose_index "$APP_NAME" "Audioeingang auswählen" "${SOURCE_LABELS[@]}")" || exit 0
+  source_index="$(choose_index "$APP_NAME" "$(text_for select_audio_input)" "${SOURCE_LABELS[@]}")" || exit 0
   local audio_source="${SOURCE_VALUES[$source_index]}"
 
   if [[ "$audio_source" != "__none__" ]]; then
     if [[ "$AUDIO_BACKEND" == "none" ]]; then
-      show_error "Kein Audio-Werkzeug gefunden. Benötigt werden entweder pactl/parec/pacat oder wpctl/pw-loopback."
+      show_error "$(text_for no_audio_tools)"
       exit 1
     fi
-    sink_index="$(choose_index "$APP_NAME" "Audioausgang auswählen" "${SINK_LABELS[@]}")" || exit 0
+    sink_index="$(choose_index "$APP_NAME" "$(text_for select_audio_output)" "${SINK_LABELS[@]}")" || exit 0
   fi
   local audio_sink="${SINK_VALUES[$sink_index]}"
 
   if ! start_audio "$audio_source" "$audio_sink"; then
-    show_error "Der Audiostream konnte nicht gestartet werden."
+    show_error "$(text_for audio_failed)"
     exit 1
   fi
 
@@ -350,7 +445,9 @@ main() {
   local status=$?
 
   if ((status != 0)); then
-    show_error "mpv wurde mit Fehlercode $status beendet. Prüfe, ob das ausgewählte Gerät gerade von OBS oder einer anderen App verwendet wird."
+    local error_message
+    printf -v error_message "$(text_for mpv_error)" "$status"
+    show_error "$error_message"
   fi
 }
 
