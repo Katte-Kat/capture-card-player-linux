@@ -1,54 +1,107 @@
 # Capture Card Player for Linux
 
-Eine kleine, portable Linux-App zum Spielen über eine Capture-Karte mit möglichst geringer Bildverzögerung. Beim Start lassen sich Videoeingang, Audioeingang und Audioausgang selbst auswählen. Die Videoliste kennzeichnet Geräte nach Möglichkeit als USB oder PCIe.
+[![Smoke test](https://github.com/Katte-Kat/capture-card-player-linux/actions/workflows/smoke-test.yml/badge.svg)](https://github.com/Katte-Kat/capture-card-player-linux/actions/workflows/smoke-test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Vorgesehene Zielsysteme: KDE/GNOME unter CachyOS/Arch, Fedora, Bazzite und SteamOS im Desktop-Modus. **USB- und PCIe-Capture-Karten werden gleichwertig durchsucht.** Sie funktionieren, wenn sie von Linux als V4L2-Videogerät (`/dev/video*`) erkannt werden. Elgato-Modelle sind daher grundsätzlich möglich; die konkrete Karte braucht aber einen funktionierenden Linux-Treiber. Audio wird separat aus sämtlichen PipeWire-/PulseAudio-Eingängen gewählt, da es bei PCIe-Karten als eigener Audioknoten auftauchen kann.
+A small Linux application for viewing and playing through a capture card with minimal display latency. At launch, you can select the video input, audio input, and audio output.
+
+USB and PCIe capture cards are detected in the same way. A card is supported when Linux exposes it as a standard V4L2 device under `/dev/video*`. Audio is selected separately through PipeWire or PulseAudio, which also supports PCIe cards that expose audio as a separate input.
+
+## Features
+
+- Select a video input at every launch
+- Select any available PipeWire or PulseAudio input
+- Select a specific audio output or use the system default
+- Supports USB and PCIe capture cards
+- Identifies devices as USB or PCIe when that information is available
+- Separate low-latency video and audio paths
+- Native mpv and Flathub mpv support
+- KDialog, Zenity, or terminal interface
+- Per-user installation without writing application files to system directories
+
+## Supported systems
+
+| System | Supported setup |
+| --- | --- |
+| Arch Linux / CachyOS | Native mpv or Flatpak |
+| Fedora | Native mpv or Flatpak |
+| Bazzite | Flathub mpv in Desktop Mode |
+| SteamOS | Flathub mpv in Desktop Mode |
+
+A functional Linux driver is still required for the capture card. Elgato cards can work when they appear as standard V4L2 devices. Cards that are only available through a vendor-specific OBS plugin are not supported directly.
 
 ## Installation
 
-1. Archiv entpacken.
-2. Im entpackten Ordner `bash install.sh` ausführen.
-3. Danach **Capture Card Player for Linux** aus dem App-Menü starten und auf Wunsch an die Taskleiste anheften.
+Clone the repository and run the installer:
 
-Der Installer schreibt nur nach `~/.local/bin` und `~/.local/share/applications`. Falls kein mpv vorhanden ist, bietet er auf Bazzite/SteamOS die Installation des Flathub-mpv und auf normalen Arch-/Fedora-Systemen eine passende native Installation an.
+```bash
+git clone https://github.com/Katte-Kat/capture-card-player-linux.git
+cd capture-card-player-linux
+bash install.sh
+```
 
-## Bedienung
+Then launch **Capture Card Player for Linux** from the application menu and optionally pin it to the taskbar.
 
-Beim Start erscheinen nacheinander:
+The installer writes application files only to:
 
-1. Videoeingang
-2. Audioeingang oder „Kein Audio“
-3. Audioausgang oder „Systemstandard“
+- `~/.local/bin`
+- `~/.local/share/applications`
 
-„Systemstandard“ gibt den Ton über den beim Start aktuellen Standardausgang wieder. Wenn du den Ausgang während des Spielens umschaltest und der Stream nicht mitwandert, Capture Card Player for Linux kurz neu starten.
+If mpv is missing, the installer offers to install the Flathub mpv package on Bazzite/SteamOS or an appropriate native package on standard Arch/Fedora systems.
 
-Das Bild läuft getrennt vom Ton mit `--profile=low-latency --untimed`, damit die Audiosynchronisation nicht wieder einen sichtbaren Bildpuffer erzeugt. `F` schaltet in mpv zwischen Vollbild und Fenster um, `Q` beendet die App und damit auch den Audiostream.
+## Usage
 
-## Bazzite und SteamOS
+The application asks for these selections at launch:
 
-Im Desktop-Modus installieren und testen. Für den Gaming-Modus kann die App danach in Steam über **Spiel hinzufügen → Steam-fremdes Spiel hinzufügen** aufgenommen werden. Die Geräteauswahl funktioniert am zuverlässigsten im Desktop-Modus.
+1. Video input
+2. Audio input or **No audio**
+3. Audio output or **System default**
 
-## Fehlerbehebung
+**System default** uses the output that is active when playback starts. If you change the system output while playing and the stream does not move automatically, restart the application.
 
-- **Videoquelle fehlt:** Mit `ls -l /dev/video*` prüfen. OBS darf die Karte nicht gleichzeitig geöffnet haben.
-- **Mehrere gleichnamige Videoquellen:** Nacheinander testen. Capture-Karten stellen häufig mehr als einen V4L2-Knoten bereit.
-- **Audioquelle fehlt:** Mit `pactl list short sources` prüfen. Bei PCIe-Karten kann Audio auch als separater ALSA/PipeWire-Eingang erscheinen.
-- **Kein Ton:** Für Arch/CachyOS wird typischerweise `libpulse`, für Fedora `pulseaudio-utils` benötigt. Alternativ funktionieren `wpctl` und `pw-loopback` aus PipeWire.
-- **Flathub-mpv sieht die Karte nicht:** `flatpak override --user --device=all io.mpv.Mpv` ausführen und erneut testen.
+Video runs separately with:
 
-## Deinstallation
+```text
+--profile=low-latency --untimed --no-audio
+```
 
-Im entpackten Ordner:
+This prevents audio synchronization from introducing a visible video buffer. Press `F` in mpv to toggle fullscreen mode and `Q` to close the player and stop the audio stream.
+
+## Bazzite and SteamOS
+
+Install and test the application in Desktop Mode. To launch it from Gaming Mode afterward, add it through **Add a Game → Add a Non-Steam Game**. Device selection is most reliable in Desktop Mode.
+
+## Troubleshooting
+
+- **No video source:** Run `ls -l /dev/video*`. OBS or another application must not have the card open at the same time.
+- **Several video sources have the same name:** Test them one at a time. Capture cards often expose more than one V4L2 node.
+- **No audio source:** Run `pactl list short sources`. A PCIe card may expose audio as a separate ALSA/PipeWire input.
+- **No audio playback:** Arch/CachyOS typically needs `libpulse`; Fedora typically needs `pulseaudio-utils`. `wpctl` and `pw-loopback` from PipeWire are also supported.
+- **Flathub mpv cannot access the card:** Run `flatpak override --user --device=all io.mpv.Mpv`, then try again.
+- **The card only appears through an OBS plugin:** The application requires a standard V4L2 `/dev/video*` device.
+
+## Uninstallation
+
+From the cloned project directory, run:
 
 ```bash
 bash uninstall.sh
 ```
 
-Eine eventuell zuvor angelegte Sicherung der Desktop-Datei wird absichtlich nicht gelöscht.
+An existing backup of the desktop entry is intentionally left in place.
 
+## Development
 
-## Lizenz
+Run the local smoke tests with:
 
-MIT – siehe [LICENSE](LICENSE).
+```bash
+bash tests/smoke-test.sh
+```
 
-Mit AI Hilfe erstellt*
+The GitHub Actions workflow runs the same tests automatically for pushes and pull requests.
+
+## License
+
+Distributed under the MIT License. See [LICENSE](LICENSE).
+
+*Created with AI assistance.*
