@@ -10,6 +10,7 @@ USB- und PCIe-Capture-Karten werden auf dieselbe Weise erkannt. Eine Karte wird 
 
 - Ausgewählte Geräte speichern und beim nächsten Start erneut verwenden
 - Zwischen gespeicherten Einstellungen und einer neuen Geräteauswahl wählen
+- Capture-Auflösung und Bildrate auswählen, statt den Gerätestandard zu verwenden
 - Beliebigen PipeWire- oder PulseAudio-Eingang auswählen
 - Bestimmten Audioausgang oder den Systemstandard verwenden
 - Unterstützung für USB- und PCIe-Capture-Karten
@@ -55,20 +56,23 @@ Falls mpv fehlt, bietet der Installer unter Bazzite/SteamOS das Flathub-mpv-Pake
 Beim ersten Start fragt die Anwendung nacheinander nach:
 
 1. Videoeingang
-2. Audioeingang oder **Kein Audio**
-3. Audioausgang oder **Systemstandard**
+2. Videoauflösung
+3. Bildrate
+4. Audioeingang oder **Kein Audio**
+5. Audioausgang oder **Systemstandard**
 
-Die Auswahl wird unter `~/.config/capture-card-player/settings` gespeichert (oder unterhalb von `$XDG_CONFIG_HOME`, falls gesetzt). Bei späteren Starts fragt das erste Menü, ob die gespeicherten Einstellungen verwendet oder die Geräte neu ausgewählt werden sollen. Ist ein gespeichertes Gerät nicht mehr verfügbar, wechselt die Anwendung automatisch zurück zur Geräteauswahl.
+Der ausgewählte Videomodus und die Geräte werden unter `~/.config/capture-card-player/settings` gespeichert (oder unterhalb von `$XDG_CONFIG_HOME`, falls gesetzt). Bei späteren Starts fragt das erste Menü, ob die gespeicherten Einstellungen verwendet oder alles neu ausgewählt werden soll. Ist ein gespeichertes Gerät oder ein Videomodus nicht mehr verfügbar, wechselt die Anwendung automatisch zurück zur Auswahl.
 
 **Systemstandard** verwendet den Ausgang, der beim Start der Wiedergabe aktiv ist. Falls der Audiostream nach einer Änderung des Systemausgangs nicht automatisch mitwandert, die Anwendung neu starten.
 
 Das Video läuft getrennt mit:
 
 ```text
+--demuxer-lavf-o=video_size=1920x1080,framerate=60,input_format=yuyv422
 --profile=low-latency --untimed --no-audio
 ```
 
-Dadurch erzeugt die Audiosynchronisation keinen sichtbaren Videopuffer. Mit `F` wird in mpv zwischen Vollbild und Fenster gewechselt. `Q` beendet den Player und den Audiostream.
+Die erste Option wird aus dem ausgewählten Modus erzeugt und verhindert beispielsweise, dass eine Capture-Karte auf 3840x2160 mit nur 18 FPS zurückfällt. Die übrigen Optionen verhindern einen sichtbaren Videopuffer durch die Audiosynchronisation. Mit `F` wird in mpv zwischen Vollbild und Fenster gewechselt. `Q` beendet den Player und den Audiostream.
 
 ## Sprache
 
@@ -87,6 +91,7 @@ Die Anwendung im Desktop-Modus installieren und testen. Anschließend kann sie �
 
 - **Keine Videoquelle:** `ls -l /dev/video*` ausführen. OBS oder eine andere Anwendung darf die Karte nicht gleichzeitig geöffnet haben.
 - **Mehrere Videoquellen mit demselben Namen:** Nacheinander testen. Capture-Karten stellen häufig mehr als einen V4L2-Knoten bereit.
+- **Das Bild ruckelt nach einem Neustart:** Alles neu auswählen und 1920x1080 mit 60 FPS statt eines langsamen 4K-Modus wählen.
 - **Keine Audioquelle:** `pactl list short sources` ausführen. Eine PCIe-Karte kann Audio als eigenen ALSA-/PipeWire-Eingang bereitstellen.
 - **Keine Audiowiedergabe:** Arch/CachyOS benötigt üblicherweise `libpulse`, Fedora üblicherweise `pulseaudio-utils`. Alternativ werden `wpctl` und `pw-loopback` von PipeWire unterstützt.
 - **Flathub-mpv kann nicht auf die Karte zugreifen:** `flatpak override --user --device=all io.mpv.Mpv` ausführen und erneut versuchen.

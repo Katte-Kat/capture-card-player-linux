@@ -65,8 +65,8 @@ text_for() {
       german="Fertig. Öffne \"%s\" über das Anwendungsmenü."
       ;;
     choose_devices)
-      english="Select the devices on the first launch. Later launches can reuse the saved selection."
-      german="Beim ersten Start wählst du die Geräte aus. Spätere Starts können die gespeicherte Auswahl übernehmen."
+      english="Select the video mode and devices on the first launch. Later launches can reuse the saved selection."
+      german="Beim ersten Start wählst du Videomodus und Geräte aus. Spätere Starts können die gespeicherte Auswahl übernehmen."
       ;;
     audio_warning)
       english="WARNING: Audio tools are missing. Video will work, but audio requires"

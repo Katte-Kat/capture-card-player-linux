@@ -66,6 +66,14 @@ text_for() {
       english="Select a video input"
       german="Videoeingang auswählen"
       ;;
+    select_video_size)
+      english="Select the video resolution"
+      german="Videoauflösung auswählen"
+      ;;
+    select_video_fps)
+      english="Select the frame rate"
+      german="Bildrate auswählen"
+      ;;
     select_audio_input)
       english="Select an audio input"
       german="Audioeingang auswählen"
@@ -234,6 +242,9 @@ contains_value() {
 
 load_saved_settings() {
   SAVED_VIDEO_DEVICE=""
+  SAVED_VIDEO_SIZE=""
+  SAVED_VIDEO_FPS=""
+  SAVED_VIDEO_FORMAT=""
   SAVED_AUDIO_SOURCE=""
   SAVED_AUDIO_SINK=""
 
@@ -244,29 +255,41 @@ load_saved_settings() {
     value="${value%$'\r'}"
     case "$key" in
       video_device) SAVED_VIDEO_DEVICE="$value" ;;
+      video_size) SAVED_VIDEO_SIZE="$value" ;;
+      video_fps) SAVED_VIDEO_FPS="$value" ;;
+      video_format) SAVED_VIDEO_FORMAT="$value" ;;
       audio_source) SAVED_AUDIO_SOURCE="$value" ;;
       audio_sink) SAVED_AUDIO_SINK="$value" ;;
     esac
   done < "$SETTINGS_FILE"
 
-  [[ -n "$SAVED_VIDEO_DEVICE" && -n "$SAVED_AUDIO_SOURCE" && -n "$SAVED_AUDIO_SINK" ]]
+  [[ -n "$SAVED_VIDEO_DEVICE" && -n "$SAVED_VIDEO_SIZE" && -n "$SAVED_VIDEO_FPS" &&
+    -n "$SAVED_VIDEO_FORMAT" && -n "$SAVED_AUDIO_SOURCE" && -n "$SAVED_AUDIO_SINK" ]]
 }
 
 saved_settings_available() {
   contains_value "$SAVED_VIDEO_DEVICE" "${VIDEO_VALUES[@]}" &&
+    saved_video_mode_available "$SAVED_VIDEO_DEVICE" "$SAVED_VIDEO_SIZE" \
+      "$SAVED_VIDEO_FPS" "$SAVED_VIDEO_FORMAT" &&
     contains_value "$SAVED_AUDIO_SOURCE" "${SOURCE_VALUES[@]}" &&
     contains_value "$SAVED_AUDIO_SINK" "${SINK_VALUES[@]}"
 }
 
 save_settings() {
   local video_device="$1"
-  local audio_source="$2"
-  local audio_sink="$3"
+  local video_size="$2"
+  local video_fps="$3"
+  local video_format="$4"
+  local audio_source="$5"
+  local audio_sink="$6"
   local temporary_file="$SETTINGS_FILE.tmp.$$"
 
   mkdir -p "$CONFIG_DIR" || return 1
   if ! (umask 077; {
     printf 'video_device=%s\n' "$video_device"
+    printf 'video_size=%s\n' "$video_size"
+    printf 'video_fps=%s\n' "$video_fps"
+    printf 'video_format=%s\n' "$video_format"
     printf 'audio_source=%s\n' "$audio_source"
     printf 'audio_sink=%s\n' "$audio_sink"
   } > "$temporary_file"); then
@@ -309,6 +332,148 @@ find_video_devices() {
     VIDEO_LABELS+=("[$bus] $name — $device")
   done
   shopt -u nullglob
+}
+
+ffmpeg_input_format() {
+  local format="$1"
+  case "$format" in
+    YUYV) printf '%s\n' "yuyv422" ;;
+    MJPG|JPEG) printf '%s\n' "mjpeg" ;;
+    H264) printf '%s\n' "h264" ;;
+    *) printf '%s\n' "${format,,}" ;;
+  esac
+}
+
+find_video_modes() {
+  local device="$1"
+  VIDEO_MODE_SIZES=()
+  VIDEO_MODE_FPS=()
+  VIDEO_MODE_FORMATS=()
+
+  command -v v4l2-ctl >/dev/null 2>&1 || return 0
+
+  local line current_format="" current_size="" fps="" output=""
+  output="$(LC_ALL=C v4l2-ctl -d "$device" --list-formats-ext 2>/dev/null || true)"
+  while IFS= read -r line; do
+    if [[ "$line" =~ \[[0-9]+\]:[[:space:]]\'([^\']+)\' ]]; then
+      current_format="$(ffmpeg_input_format "${BASH_REMATCH[1]}")"
+    elif [[ "$line" =~ Size:[[:space:]]Discrete[[:space:]]([0-9]+x[0-9]+) ]]; then
+      current_size="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ Interval:[[:space:]]Discrete.*\(([0-9]+([.][0-9]+)?)[[:space:]]fps\) ]]; then
+      fps="${BASH_REMATCH[1]}"
+      fps="${fps%.000}"
+      if [[ -n "$current_format" && -n "$current_size" ]]; then
+        VIDEO_MODE_SIZES+=("$current_size")
+        VIDEO_MODE_FPS+=("$fps")
+        VIDEO_MODE_FORMATS+=("$current_format")
+      fi
+    fi
+  done <<< "$output"
+}
+
+mode_exists() {
+  local size="$1"
+  local fps="$2"
+  local format="$3"
+  local i
+  for i in "${!VIDEO_MODE_SIZES[@]}"; do
+    if [[ "${VIDEO_MODE_SIZES[$i]}" == "$size" && "${VIDEO_MODE_FPS[$i]}" == "$fps" &&
+      "${VIDEO_MODE_FORMATS[$i]}" == "$format" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+saved_video_mode_available() {
+  local device="$1"
+  local size="$2"
+  local fps="$3"
+  local format="$4"
+  find_video_modes "$device"
+
+  # Without v4l2-ctl the mode cannot be queried, so mpv validates it when opening.
+  ((${#VIDEO_MODE_SIZES[@]} == 0)) && return 0
+  mode_exists "$size" "$fps" "$format"
+}
+
+add_resolution_option() {
+  local size="$1"
+  contains_value "$size" "${RESOLUTION_VALUES[@]}" && return
+  RESOLUTION_VALUES+=("$size")
+  RESOLUTION_LABELS+=("${size/x/ × }")
+}
+
+build_resolution_options() {
+  RESOLUTION_VALUES=()
+  RESOLUTION_LABELS=()
+
+  if ((${#VIDEO_MODE_SIZES[@]} == 0)); then
+    add_resolution_option "1920x1080"
+    add_resolution_option "1280x720"
+    return
+  fi
+
+  local preferred size
+  for preferred in "1920x1080" "1280x720"; do
+    contains_value "$preferred" "${VIDEO_MODE_SIZES[@]}" && add_resolution_option "$preferred"
+  done
+  for size in "${VIDEO_MODE_SIZES[@]}"; do
+    add_resolution_option "$size"
+  done
+}
+
+add_fps_option() {
+  local fps="$1"
+  contains_value "$fps" "${FPS_VALUES[@]}" && return
+  FPS_VALUES+=("$fps")
+  FPS_LABELS+=("$fps FPS")
+}
+
+build_fps_options() {
+  local size="$1"
+  FPS_VALUES=()
+  FPS_LABELS=()
+
+  if ((${#VIDEO_MODE_SIZES[@]} == 0)); then
+    add_fps_option "60"
+    add_fps_option "50"
+    add_fps_option "30"
+    return
+  fi
+
+  local i
+  for i in "${!VIDEO_MODE_SIZES[@]}"; do
+    [[ "${VIDEO_MODE_SIZES[$i]}" == "$size" ]] || continue
+    add_fps_option "${VIDEO_MODE_FPS[$i]}"
+  done
+}
+
+preferred_video_format() {
+  local size="$1"
+  local fps="$2"
+  local preferred i
+
+  if ((${#VIDEO_MODE_SIZES[@]} == 0)); then
+    printf '%s\n' "__auto__"
+    return
+  fi
+
+  for preferred in "yuyv422" "nv12" "mjpeg" "h264"; do
+    mode_exists "$size" "$fps" "$preferred" && {
+      printf '%s\n' "$preferred"
+      return
+    }
+  done
+
+  for i in "${!VIDEO_MODE_SIZES[@]}"; do
+    if [[ "${VIDEO_MODE_SIZES[$i]}" == "$size" && "${VIDEO_MODE_FPS[$i]}" == "$fps" ]]; then
+      printf '%s\n' "${VIDEO_MODE_FORMATS[$i]}"
+      return
+    fi
+  done
+
+  printf '%s\n' "__auto__"
 }
 
 load_pactl_descriptions() {
@@ -487,7 +652,8 @@ main() {
   fi
 
   find_audio_devices
-  local video_device="" audio_source="" audio_sink=""
+  local video_device="" video_size="" video_fps="" video_format=""
+  local audio_source="" audio_sink=""
   local settings_index
 
   if load_saved_settings; then
@@ -496,6 +662,9 @@ main() {
     if ((settings_index == 0)); then
       if saved_settings_available; then
         video_device="$SAVED_VIDEO_DEVICE"
+        video_size="$SAVED_VIDEO_SIZE"
+        video_fps="$SAVED_VIDEO_FPS"
+        video_format="$SAVED_VIDEO_FORMAT"
         audio_source="$SAVED_AUDIO_SOURCE"
         audio_sink="$SAVED_AUDIO_SINK"
       else
@@ -505,9 +674,19 @@ main() {
   fi
 
   if [[ -z "$video_device" ]]; then
-    local video_index source_index=0 sink_index=0
+    local video_index resolution_index fps_index source_index=0 sink_index=0
     video_index="$(choose_index "$APP_NAME" "$(text_for select_video)" "${VIDEO_LABELS[@]}")" || exit 0
     video_device="${VIDEO_VALUES[$video_index]}"
+
+    find_video_modes "$video_device"
+    build_resolution_options
+    resolution_index="$(choose_index "$APP_NAME" "$(text_for select_video_size)" "${RESOLUTION_LABELS[@]}")" || exit 0
+    video_size="${RESOLUTION_VALUES[$resolution_index]}"
+
+    build_fps_options "$video_size"
+    fps_index="$(choose_index "$APP_NAME" "$(text_for select_video_fps)" "${FPS_LABELS[@]}")" || exit 0
+    video_fps="${FPS_VALUES[$fps_index]}"
+    video_format="$(preferred_video_format "$video_size" "$video_fps")"
 
     source_index="$(choose_index "$APP_NAME" "$(text_for select_audio_input)" "${SOURCE_LABELS[@]}")" || exit 0
     audio_source="${SOURCE_VALUES[$source_index]}"
@@ -520,7 +699,8 @@ main() {
       sink_index="$(choose_index "$APP_NAME" "$(text_for select_audio_output)" "${SINK_LABELS[@]}")" || exit 0
     fi
     audio_sink="${SINK_VALUES[$sink_index]}"
-    save_settings "$video_device" "$audio_source" "$audio_sink" || true
+    save_settings "$video_device" "$video_size" "$video_fps" "$video_format" \
+      "$audio_source" "$audio_sink" || true
   fi
 
   if ! start_audio "$audio_source" "$audio_sink"; then
@@ -528,7 +708,13 @@ main() {
     exit 1
   fi
 
+  local lavf_options="video_size=$video_size,framerate=$video_fps"
+  if [[ "$video_format" != "__auto__" ]]; then
+    lavf_options+=",input_format=$video_format"
+  fi
+
   "${PLAYER[@]}" "av://v4l2:$video_device" \
+    "--demuxer-lavf-o=$lavf_options" \
     --profile=low-latency \
     --untimed \
     --no-audio \

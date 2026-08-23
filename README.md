@@ -10,6 +10,7 @@ USB and PCIe capture cards are detected in the same way. A card is supported whe
 
 - Save the selected devices and reuse them on the next launch
 - Choose between saved settings and selecting the devices again
+- Select the capture resolution and frame rate instead of using the device default
 - Select any available PipeWire or PulseAudio input
 - Select a specific audio output or use the system default
 - Supports USB and PCIe capture cards
@@ -55,20 +56,23 @@ If mpv is missing, the installer offers to install the Flathub mpv package on Ba
 On the first launch, the application asks for these selections:
 
 1. Video input
-2. Audio input or **No audio**
-3. Audio output or **System default**
+2. Video resolution
+3. Frame rate
+4. Audio input or **No audio**
+5. Audio output or **System default**
 
-The selection is saved in `~/.config/capture-card-player/settings` (or below `$XDG_CONFIG_HOME` when it is set). On later launches, the first menu asks whether to use the saved settings or select the devices again. If a saved device is no longer available, the application automatically returns to device selection.
+The selected video mode and devices are saved in `~/.config/capture-card-player/settings` (or below `$XDG_CONFIG_HOME` when it is set). On later launches, the first menu asks whether to use the saved settings or select everything again. If a saved device or video mode is no longer available, the application automatically returns to selection.
 
 **System default** uses the output that is active when playback starts. If you change the system output while playing and the stream does not move automatically, restart the application.
 
 Video runs separately with:
 
 ```text
+--demuxer-lavf-o=video_size=1920x1080,framerate=60,input_format=yuyv422
 --profile=low-latency --untimed --no-audio
 ```
 
-This prevents audio synchronization from introducing a visible video buffer. Press `F` in mpv to toggle fullscreen mode and `Q` to close the player and stop the audio stream.
+The first option is generated from the selected mode; for example, it prevents a capture card from falling back to 3840x2160 at only 18 FPS. The remaining options prevent audio synchronization from introducing a visible video buffer. Press `F` in mpv to toggle fullscreen mode and `Q` to close the player and stop the audio stream.
 
 ## Language
 
@@ -87,6 +91,7 @@ Install and test the application in Desktop Mode. To launch it from Gaming Mode 
 
 - **No video source:** Run `ls -l /dev/video*`. OBS or another application must not have the card open at the same time.
 - **Several video sources have the same name:** Test them one at a time. Capture cards often expose more than one V4L2 node.
+- **The image is choppy after a reboot:** Select everything again and choose 1920x1080 at 60 FPS instead of a low-frame-rate 4K mode.
 - **No audio source:** Run `pactl list short sources`. A PCIe card may expose audio as a separate ALSA/PipeWire input.
 - **No audio playback:** Arch/CachyOS typically needs `libpulse`; Fedora typically needs `pulseaudio-utils`. `wpctl` and `pw-loopback` from PipeWire are also supported.
 - **Flathub mpv cannot access the card:** Run `flatpak override --user --device=all io.mpv.Mpv`, then try again.
