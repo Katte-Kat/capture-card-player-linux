@@ -51,6 +51,18 @@ Der Installer schreibt Anwendungsdateien ausschließlich nach:
 
 Falls mpv fehlt, bietet der Installer unter Bazzite/SteamOS das Flathub-mpv-Paket und unter normalen Arch-/Fedora-Systemen ein passendes natives Paket an.
 
+## Aktualisierung
+
+Repository aktualisieren und die Anwendungsdateien erneut installieren mit:
+
+```bash
+cd ~/capture-card-player-linux
+git pull --ff-only
+bash install.sh
+```
+
+Den laufenden Player vor der Aktualisierung schließen und die Anwendung anschließend erneut über das Anwendungsmenü starten.
+
 ## Bedienung
 
 Beim ersten Start fragt die Anwendung nacheinander nach:

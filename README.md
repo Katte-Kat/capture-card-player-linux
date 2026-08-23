@@ -51,6 +51,18 @@ The installer writes application files only to:
 
 If mpv is missing, the installer offers to install the Flathub mpv package on Bazzite/SteamOS or an appropriate native package on standard Arch/Fedora systems.
 
+## Updating
+
+Update the repository and reinstall the application files with:
+
+```bash
+cd ~/capture-card-player-linux
+git pull --ff-only
+bash install.sh
+```
+
+Close the running player before updating, then start the application again from the application menu.
+
 ## Usage
 
 On the first launch, the application asks for these selections:
