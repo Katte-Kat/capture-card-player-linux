@@ -536,7 +536,7 @@ find_audio_with_pipewire() {
   SINK_VALUES=("__default__")
   SINK_LABELS=("$(text_for system_default_current)")
 
-  local section="" line id name output
+  local section="" line id name node_name output
   output="$(wpctl status -n 2>/dev/null || true)"
   [[ -n "$output" ]] || output="$(wpctl status 2>/dev/null || true)"
   while IFS= read -r line; do
@@ -555,12 +555,17 @@ find_audio_with_pipewire() {
       id="${BASH_REMATCH[1]}"
       name="${BASH_REMATCH[2]}"
       name="${name%[}"
+      # pw-loopback resolves --capture / --playback against node.name or
+      # object.serial, not the wpctl node id. Store the node.name.
+      node_name="$(wpctl inspect "$id" 2>/dev/null \
+        | sed -n 's/^[[:space:]]*\*\{0,1\}[[:space:]]*node\.name = "\(.*\)"$/\1/p' | head -1)"
+      [[ -n "$node_name" ]] || node_name="$id"
       if [[ "$section" == "sources" ]]; then
-        [[ "$name" == *.monitor ]] && continue
-        SOURCE_VALUES+=("$id")
+        [[ "$name" == *.monitor || "$node_name" == *.monitor ]] && continue
+        SOURCE_VALUES+=("$node_name")
         SOURCE_LABELS+=("$name (ID $id)")
       else
-        SINK_VALUES+=("$id")
+        SINK_VALUES+=("$node_name")
         SINK_LABELS+=("$name (ID $id)")
       fi
     fi
