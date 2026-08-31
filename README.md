@@ -105,6 +105,7 @@ Install and test the application in Desktop Mode. To launch it from Gaming Mode 
 - **Several video sources have the same name:** Test them one at a time. Capture cards often expose more than one V4L2 node.
 - **The image is choppy after a reboot:** Select everything again and choose 1920x1080 at 60 FPS instead of a low-frame-rate 4K mode.
 - **No audio source:** Run `pactl list short sources`. A PCIe card may expose audio as a separate ALSA/PipeWire input.
+- **The capture card's audio is missing from the list (e.g. Elgato HD60 S):** Its driver publishes a PipeWire-native source that a classic PulseAudio server (Linux Mint default) hides from `pactl`. Install `wireplumber` and `pipewire` so `wpctl` and `pw-loopback` are present — the player then queries PipeWire directly and the input appears. Alternatively switch the host to `pipewire-pulse`.
 - **No audio playback:** Arch/CachyOS typically needs `libpulse`; Fedora typically needs `pulseaudio-utils`. `wpctl` and `pw-loopback` from PipeWire are also supported.
 - **Flathub mpv cannot access the card:** Run `flatpak override --user --device=all io.mpv.Mpv`, then try again.
 - **The card only appears through an OBS plugin:** The application requires a standard V4L2 `/dev/video*` device.

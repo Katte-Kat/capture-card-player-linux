@@ -105,6 +105,7 @@ Die Anwendung im Desktop-Modus installieren und testen. Anschließend kann sie �
 - **Mehrere Videoquellen mit demselben Namen:** Nacheinander testen. Capture-Karten stellen häufig mehr als einen V4L2-Knoten bereit.
 - **Das Bild ruckelt nach einem Neustart:** Alles neu auswählen und 1920x1080 mit 60 FPS statt eines langsamen 4K-Modus wählen.
 - **Keine Audioquelle:** `pactl list short sources` ausführen. Eine PCIe-Karte kann Audio als eigenen ALSA-/PipeWire-Eingang bereitstellen.
+- **Das Audio der Capture-Karte fehlt in der Liste (z. B. Elgato HD60 S):** Der Treiber veröffentlicht eine PipeWire-eigene Quelle, die ein klassischer PulseAudio-Server (Standard bei Linux Mint) vor `pactl` verbirgt. `wireplumber` und `pipewire` installieren, damit `wpctl` und `pw-loopback` vorhanden sind — der Player fragt dann PipeWire direkt ab und der Eingang erscheint. Alternativ den Host auf `pipewire-pulse` umstellen.
 - **Keine Audiowiedergabe:** Arch/CachyOS benötigt üblicherweise `libpulse`, Fedora üblicherweise `pulseaudio-utils`. Alternativ werden `wpctl` und `pw-loopback` von PipeWire unterstützt.
 - **Flathub-mpv kann nicht auf die Karte zugreifen:** `flatpak override --user --device=all io.mpv.Mpv` ausführen und erneut versuchen.
 - **Die Karte erscheint nur über ein OBS-Plugin:** Die Anwendung benötigt ein standardmäßiges V4L2-Gerät unter `/dev/video*`.

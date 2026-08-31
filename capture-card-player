@@ -538,6 +538,7 @@ find_audio_with_pipewire() {
 
   local section="" line id name output
   output="$(wpctl status -n 2>/dev/null || true)"
+  [[ -n "$output" ]] || output="$(wpctl status 2>/dev/null || true)"
   while IFS= read -r line; do
     if [[ "$line" == *"Sinks:"* ]]; then
       section="sinks"
@@ -573,10 +574,26 @@ find_audio_devices() {
   SINK_VALUES=("__default__")
   SINK_LABELS=("$(text_for system_default)")
 
+  local pulse_ok=false pipewire_ok=false
   if command -v pactl >/dev/null 2>&1 && command -v parec >/dev/null 2>&1 && command -v pacat >/dev/null 2>&1; then
-    find_audio_with_pulse
-  elif command -v wpctl >/dev/null 2>&1 && command -v pw-loopback >/dev/null 2>&1; then
+    pulse_ok=true
+  fi
+  if command -v wpctl >/dev/null 2>&1 && command -v pw-loopback >/dev/null 2>&1 && wpctl status >/dev/null 2>&1; then
+    pipewire_ok=true
+  fi
+
+  # Some capture drivers (e.g. the Elgato HD60 S userspace driver) publish their
+  # audio as a PipeWire-native source. A classic PulseAudio server, still the
+  # default on Linux Mint, does not expose those nodes to pactl, so the input
+  # never appears. Query PipeWire directly whenever it is running.
+  if $pipewire_ok; then
     find_audio_with_pipewire
+    if (( ${#SOURCE_VALUES[@]} > 1 )) || ! $pulse_ok; then
+      return
+    fi
+  fi
+  if $pulse_ok; then
+    find_audio_with_pulse
   fi
 }
 
